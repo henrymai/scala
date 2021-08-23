@@ -615,17 +615,20 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
     * $willForceEvaluation
     */
   def groupMapReduce[K, B](key: A => K)(f: A => B)(reduce: (B, B) => B): immutable.Map[K, B] = {
-    val m = mutable.Map.empty[K, B]
-    for (elem <- this) {
+    val m = mutable.Map.empty[K, mutable.Buffer[B]]
+    val iter = this.iterator
+    while(iter.hasNext) {
+      val elem = iter.next()
       val k = key(elem)
-      val v =
-        m.get(k) match {
-          case Some(b) => reduce(b, f(elem))
-          case None => f(elem)
-        }
-      m.put(k, v)
+      val v_ = f(elem)
+      m.get(k) match {
+        case Some(v) =>
+          v.update(0, reduce(v(0), v_))
+        case None =>
+          m.put(k, mutable.Buffer(v_))
+      }
     }
-    m.to(immutable.Map)
+    m.map(elem => (elem._1, elem._2(0))).toMap
   }
 
   /** Computes a prefix scan of the elements of the collection.
